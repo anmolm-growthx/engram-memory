@@ -85,6 +85,58 @@ export function chunkContent(content: string, strategy: Exclude<ChunkStrategy, "
   }
 }
 
+/**
+ * engram's canonical tiers — the lifecycle machinery keys off these: `episodic`
+ * is the transient tier promotion lifts FROM; `semantic`/`procedural` are the
+ * durable tiers consolidation protects from forgetting.
+ */
+const CANONICAL_TIERS = new Set(["episodic", "semantic", "procedural", "working"]);
+
+/**
+ * Normalise whatever `tier`/`type` a writer used onto a canonical engram tier,
+ * so promotion, forgetting, and tier-filtering treat every memory the same no
+ * matter who wrote the file — auto-capture, a human, or the agent free-writing
+ * markdown. The writer's original label is preserved in metadata; this only
+ * decides which engram tier governs the memory's lifecycle.
+ *
+ * Returns `undefined` for untyped content so the store applies its own default
+ * (we never invent a tier where the writer signalled none).
+ */
+export function canonicalTier(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const t = raw.trim().toLowerCase();
+  if (t === "") return undefined;
+  if (CANONICAL_TIERS.has(t)) return t;
+  // Hand-curated, durable knowledge (Friday's memory taxonomy + common synonyms).
+  if (["feedback", "project", "reference", "user", "fact", "lesson", "rule", "note", "insight"].includes(t)) return "semantic";
+  // Time-stamped conversational / log entries.
+  if (["conversation", "daily", "exchange", "session", "episode", "log", "message"].includes(t)) return "episodic";
+  // Step-by-step operational knowledge.
+  if (["runbook", "howto", "procedure", "process", "checklist", "playbook"].includes(t)) return "procedural";
+  // Explicitly typed but unrecognised → durable, never transient (so a typo
+  // can't make a deliberate memory silently eligible for cold-archiving).
+  return "semantic";
+}
+
+/**
+ * Default salience for a file that declares none, keyed by canonical tier, so
+ * hand-written durable memories (feedback/projects/references) outrank ambient
+ * captured chatter instead of all defaulting to a flat 0.5.
+ */
+function defaultImportance(tier: string | undefined): number | undefined {
+  switch (tier) {
+    case "semantic":
+    case "procedural":
+      return 0.7;
+    case "episodic":
+      return 0.5;
+    case "working":
+      return 0.4;
+    default:
+      return undefined; // untyped → let the store apply its own default
+  }
+}
+
 function parseDate(value: unknown): number | undefined {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
@@ -112,8 +164,13 @@ export function ingestFile(absPath: string, rootDir: string, opts: IngestOptions
     data.metadata && typeof data.metadata === "object"
       ? (data.metadata as Record<string, unknown>)
       : {};
-  const tier = asString(data.tier) ?? asString(meta.type);
-  const importance = typeof data.importance === "number" ? data.importance : undefined;
+  // Resolve the writer's tier signal from every convention seen in the wild:
+  //   auto-capture → `tier`; nested → `metadata.type`; agent-curated → top-level
+  //   `type`. Then canonicalise so the lifecycle machinery treats them alike.
+  const rawTier = asString(data.tier) ?? asString(meta.type) ?? asString(data.type);
+  const tier = canonicalTier(rawTier);
+  const importance =
+    typeof data.importance === "number" ? data.importance : defaultImportance(tier);
   const createdAt =
     parseDate(data.date) ?? parseDate(data.created_at) ?? statSync(absPath).mtimeMs;
 
