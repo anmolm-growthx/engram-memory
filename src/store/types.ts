@@ -62,6 +62,14 @@ export interface MemoryRecord {
    * from recall by default but never hard-deleted — re-admitted on a later hit.
    */
   archived: boolean;
+  /**
+   * Bi-temporal validity (Zep-style). `validAt` is when the fact became true
+   * (defaults to creation); `invalidAt` is set when a newer memory supersedes/
+   * corrects it. A non-null `invalidAt` means the fact is stale — excluded from
+   * recall by default so engram never surfaces a corrected fact as current.
+   */
+  validAt: number | null;
+  invalidAt: number | null;
   embedding: Float32Array | null;
   embeddingModel: string | null;
   embeddingDim: number | null;
@@ -109,6 +117,11 @@ export interface MemoryStore {
   markUsed(ids: string[]): void;
   /** Set the cold-archive flag for the given ids (Phase 3 consolidation). */
   setArchived(ids: string[], archived: boolean): void;
+  /**
+   * Stamp (or clear, with `null`) the `invalid_at` timestamp on the given ids —
+   * how a memory is marked superseded/stale (bi-temporal supersession).
+   */
+  setInvalidAt(ids: string[], at: number | null): void;
   stats(): StoreStats;
   close(): void;
 

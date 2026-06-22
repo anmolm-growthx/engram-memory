@@ -6,6 +6,7 @@ import { buildEdges, type EdgeBuildOptions, type EdgeBuildResult } from "./graph
 import { buildLlmEdges, type LlmEdgeOptions, type LlmEdgeResult } from "./graph/llm-edges.js";
 import { extractEntities } from "./graph/entities.js";
 import { tagMemories as tagMemoriesImpl, type MemoryTags } from "./enrich/tagging.js";
+import { affectFromMetadata } from "./enrich/emotions.js";
 import {
   consolidate, reinforce, readmit, salience, DEFAULT_SALIENCE,
   type ConsolidateOptions, type ConsolidateResult,
@@ -143,6 +144,8 @@ export class Engram {
         lastUsedAt: null,
         useCount: 0,
         archived: false,
+        validAt: input.createdAt ?? now,
+        invalidAt: null,
         embedding: emb,
         embeddingModel: this.embedding.name,
         embeddingDim: emb ? emb.length : null,
@@ -243,6 +246,21 @@ export class Engram {
   /** Re-admit cold-archived memories back into recall. */
   readmit(ids: string[]): void {
     readmit(this.store, ids);
+  }
+
+  /**
+   * Mark a memory superseded by a newer one (bi-temporal correction). Stamps the
+   * older memory's `invalidAt` so recall stops surfacing it as current, and
+   * records a `supersedes` edge from the newer memory to the older for the audit
+   * trail. Pass `at` to control the timestamp (defaults to now). Idempotent.
+   * Use `recall(q, { includeSuperseded: true })` to see superseded facts again.
+   */
+  supersede(newerId: string, olderId: string, at?: number): void {
+    const now = at ?? Date.now();
+    this.store.setInvalidAt([olderId], now);
+    this.store.addEdge({
+      srcId: newerId, dstId: olderId, type: "supersedes", weight: 1, createdAt: now, updatedAt: now,
+    });
   }
 
   /**
@@ -408,6 +426,7 @@ export class Engram {
         if (byId.has(id)) continue;
         const rec = freshById.get(id);
         if (!rec) continue;
+        if (!opts.includeSuperseded && rec.invalidAt != null) continue; // stale fact
         byId.set(id, {
           id: rec.id,
           content: rec.content,
@@ -444,6 +463,7 @@ export class Engram {
       }
       const rec = freshById.get(id);
       if (!rec) continue; // dangling edge endpoint — skip
+      if (!opts.includeSuperseded && rec.invalidAt != null) continue; // stale fact
       byId.set(id, {
         id: rec.id,
         content: rec.content,
@@ -493,8 +513,7 @@ export class Engram {
       // Frontmatter `metadata:` is nested under record.metadata.metadata; fall
       // back to the top level for memories tagged a different way.
       const inner = (md.metadata && typeof md.metadata === "object" ? md.metadata : md) as Record<string, unknown>;
-      const emotion = typeof inner.emotion === "string" ? inner.emotion : undefined;
-      const ei = inner.emotion_intensity ?? inner.emotionIntensity;
+      const affect = affectFromMetadata(r.metadata);
       return {
         id: r.id,
         label: r.content.replace(/\s+/g, " ").trim().slice(0, labelChars),
@@ -504,8 +523,8 @@ export class Engram {
         useCount: r.useCount,
         archived: r.archived,
         salience: salience(r, now, DEFAULT_SALIENCE),
-        emotion,
-        emotionIntensity: typeof ei === "number" ? ei : undefined,
+        emotion: affect.emotion,
+        emotionIntensity: affect.intensity || undefined,
         topic: typeof inner.topic === "string" && inner.topic ? inner.topic : undefined,
       };
     });

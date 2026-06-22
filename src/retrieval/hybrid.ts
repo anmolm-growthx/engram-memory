@@ -2,6 +2,7 @@ import type { MemoryStore } from "../store/types.js";
 import type { EmbeddingProvider } from "../embeddings/provider.js";
 import type { RecallOptions, RecallResult, RecallWeights } from "../types.js";
 import { cosine } from "../util/cosine.js";
+import { affectFromMetadata } from "../enrich/emotions.js";
 
 export const DEFAULT_WEIGHTS: RecallWeights = {
   semantic: 1,
@@ -11,6 +12,11 @@ export const DEFAULT_WEIGHTS: RecallWeights = {
   // get a moderate lift so a thing you told Friday moments ago ranks above
   // stale matches. Gentle enough not to drown clear relevance.
   recency: 0.4,
+  // Frequency + affect: gentle by default, like importance — they break ties and
+  // tilt close calls (a memory you keep recalling, or one tagged high-arousal)
+  // without overriding clear relevance.
+  frequency: 0.3,
+  emotion: 0.3,
   activation: 1,
   rrfK: 60,
   recencyHalfLifeDays: 30,
@@ -80,6 +86,7 @@ export async function recall(
   // --- Materialise candidates and apply salience / recency boosts ---
   let records = store.getByIds([...entries.keys()]);
   if (!opts.includeArchived) records = records.filter((r) => !r.archived);
+  if (!opts.includeSuperseded) records = records.filter((r) => r.invalidAt == null);
   if (opts.tier) records = records.filter((r) => r.tier === opts.tier);
 
   const now = Date.now();
@@ -100,10 +107,25 @@ export async function recall(
       score *= 1 + w.recency * recencyTerm;
     }
 
+    // Frequency boost: often-recalled memories stay sharp (saturating in useCount).
+    let freqTerm: number | undefined;
+    if (w.frequency > 0 && r.useCount > 0) {
+      freqTerm = 1 - 1 / (1 + r.useCount); // 0 → 1, saturating
+      score *= 1 + w.frequency * freqTerm;
+    }
+
+    // Affect boost: high-arousal memories are better recalled (amygdala flag).
+    const affect = affectFromMetadata(r.metadata);
+    if (w.emotion > 0 && affect.intensity > 0) {
+      score *= 1 + w.emotion * affect.intensity;
+    }
+
     const why: string[] = [];
     if (e.semRank) why.push(`semantic #${e.semRank} (${(e.semScore ?? 0).toFixed(2)})`);
     if (e.lexRank) why.push(`lexical #${e.lexRank}`);
     why.push(`importance ${r.importance.toFixed(2)}`);
+    if (freqTerm) why.push(`used ${r.useCount}×`);
+    if (affect.intensity > 0) why.push(`${affect.emotion ?? "affect"} ${affect.intensity.toFixed(2)}`);
 
     return {
       id: r.id,
@@ -112,7 +134,10 @@ export async function recall(
       tier: r.tier,
       importance: r.importance,
       score,
-      scores: { semantic: e.semScore, lexical: e.lexScore, rrf: e.rrf },
+      scores: {
+        semantic: e.semScore, lexical: e.lexScore, rrf: e.rrf,
+        frequency: freqTerm, emotion: affect.intensity || undefined,
+      },
       ranks: { semantic: e.semRank, lexical: e.lexRank },
       metadata: r.metadata,
       why: why.join(" · "),

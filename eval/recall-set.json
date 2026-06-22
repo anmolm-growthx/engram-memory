@@ -1,0 +1,12 @@
+[
+  { "query": "production broke after a deploy because the migration had not run", "relevantIds": ["deploy-prod-outage"] },
+  { "query": "what is the rule about running migrations before deploying?", "relevantIds": ["deploy-rollback-rule"] },
+  { "query": "setting up a member account and admin dashboard for a new user", "relevantIds": ["member-admin-dashboard"] },
+  { "query": "what is the contact phone number on file?", "relevantIds": ["phone-number-corrected"] },
+  { "query": "users could not log in expired oauth token", "relevantIds": ["oauth-login-bug"] },
+  { "query": "can I trust an agent that says it already finished the task?", "relevantIds": ["verify-agent-claims"] },
+  { "query": "add a live neuron activation visualization to the dashboard graph", "relevantIds": ["dashboard-neuron-viz"] },
+  { "query": "bug triage stalled on a judgment call, what should I do?", "relevantIds": ["blocking-decision-dm"] },
+  { "query": "team lunch ramen downtown", "relevantIds": ["ramen-lunch"] },
+  { "query": "the deploy migration outage and the lesson we took from it", "relevantIds": ["deploy-prod-outage", "deploy-rollback-rule"] }
+]

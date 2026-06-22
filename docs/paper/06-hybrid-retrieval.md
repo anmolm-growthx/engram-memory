@@ -11,7 +11,7 @@ A query runs through two independent retrievers:
 2. **Lexical** — FTS5/bm25 keyword search over the text mirror, best-first.
 
 They are complementary. Lexical nails exact terms and rare tokens ("relevance_score",
-"Venkatesh") with no model. Semantic catches paraphrase and word-overlap the keyword
+a specific username) with no model. Semantic catches paraphrase and word-overlap the keyword
 index misses. Neither alone is enough; together they cover each other's blind spots.
 
 ## 6.2 Why Reciprocal Rank Fusion

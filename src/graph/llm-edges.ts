@@ -119,6 +119,7 @@ export async function buildLlmEdges(
 
   const now = Date.now();
   const edges: MemoryEdge[] = [];
+  const superseded = new Set<string>();
 
   for (let start = 0; start < pairs.length; start += batchSize) {
     const slice = pairs.slice(start, start + batchSize);
@@ -144,9 +145,14 @@ export async function buildLlmEdges(
       const [src, dst] = lab.dir === "YX" ? [item.b, item.a] : [item.a, item.b];
       edges.push({ srcId: src, dstId: dst, type: lab.rel, weight, createdAt: now, updatedAt: now });
       result[lab.rel as "caused" | "supersedes" | "lesson_from"]++;
+      // Bi-temporal supersession: a `supersedes` edge means `src` (the newer,
+      // authoritative memory) corrects `dst` — so `dst` is now stale. Stamp its
+      // invalid_at so recall stops surfacing the corrected fact as current.
+      if (lab.rel === "supersedes") superseded.add(dst);
     }
   }
 
   store.addEdges(edges);
+  if (superseded.size > 0) store.setInvalidAt([...superseded], now);
   return result;
 }

@@ -73,8 +73,10 @@ export {
   emotionValence,
   isKnownEmotion,
   emotionPalettePrompt,
+  affectFromMetadata,
   type EmotionFamily,
   type Valence,
+  type Affect,
 } from "./enrich/emotions.js";
 export {
   buildLlmEdges,

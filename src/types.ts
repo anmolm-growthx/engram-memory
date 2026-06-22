@@ -26,7 +26,19 @@ export interface RecallWeights {
   /** Strength of the recency boost. 0 disables it (default). */
   recency: number;
   /**
-   * Weight on graph-spread activation — the fifth signal (Phase 2). Only
+   * Strength of the frequency boost — memories retrieved often stay sharp
+   * (the fifth Generative-Agents term). Scales with a saturating function of
+   * `useCount`. 0 disables it.
+   */
+  frequency: number;
+  /**
+   * Strength of the affect boost — high-arousal memories are better recalled
+   * (the amygdala "save this" flag). Scales with a memory's tagged
+   * `emotionIntensity`, valence-agnostic. 0 disables it.
+   */
+  emotion: number;
+  /**
+   * Weight on graph-spread activation — the association signal (Phase 2). Only
    * applies when recall runs in `associative` mode; scales how much a memory's
    * received activation lifts (or creates) its score.
    */
@@ -58,6 +70,12 @@ export interface RecallOptions {
   tier?: string;
   /** Include cold-archived memories (Phase 3). Default false. */
   includeArchived?: boolean;
+  /**
+   * Include superseded (stale) memories — those with `invalidAt` set. Default
+   * false, so corrected facts never surface as current. Set true for explicitly
+   * historical queries ("what did we believe last week?").
+   */
+  includeSuperseded?: boolean;
   /**
    * Hebbian reinforcement (Phase 4): after recall, strengthen the edges among
    * the returned memories so frequently co-retrieved memories cluster. Default
@@ -96,7 +114,7 @@ export interface RecallResult {
   importance: number;
   /** Final fused score (higher = better). */
   score: number;
-  scores: { semantic?: number; lexical?: number; rrf: number; activation?: number };
+  scores: { semantic?: number; lexical?: number; rrf: number; activation?: number; frequency?: number; emotion?: number };
   ranks: { semantic?: number; lexical?: number };
   metadata: Record<string, unknown> | null;
   /** Human-readable explanation of why this memory surfaced (the "audit" trace). */

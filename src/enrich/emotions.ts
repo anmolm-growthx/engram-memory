@@ -129,6 +129,38 @@ export function isKnownEmotion(emotion: string): boolean {
   return META.has(emotion.trim().toLowerCase());
 }
 
+/** A memory's affect, extracted from its stored metadata. */
+export interface Affect {
+  /** The emotion label, if tagged (lowercase). */
+  emotion?: string;
+  /** Emotional intensity 0..1 (0 when untagged). The "save this" arousal flag. */
+  intensity: number;
+  valence: Valence;
+}
+
+/**
+ * Pull a memory's affect out of its metadata, tolerant of where the tagger put
+ * it: emotion/intensity may sit at the top level OR nested under `metadata:`
+ * (frontmatter convention), and the intensity key may be `emotionIntensity` or
+ * `emotion_intensity`. Intensity is clamped to [0,1] (a 1..10 value is /10'd).
+ * Returns a zero-intensity neutral affect when nothing is tagged — so callers
+ * can fold it into a score unconditionally without changing untagged memories.
+ */
+export function affectFromMetadata(metadata: Record<string, unknown> | null | undefined): Affect {
+  if (!metadata) return { intensity: 0, valence: "neutral" };
+  const inner = (metadata.metadata && typeof metadata.metadata === "object"
+    ? metadata.metadata
+    : metadata) as Record<string, unknown>;
+  const emotion = typeof inner.emotion === "string" && inner.emotion
+    ? inner.emotion.trim().toLowerCase()
+    : undefined;
+  const rawI = inner.emotion_intensity ?? inner.emotionIntensity;
+  let intensity = typeof rawI === "number" ? rawI : Number(rawI);
+  if (!Number.isFinite(intensity)) intensity = 0;
+  intensity = Math.min(1, Math.max(0, intensity > 1 ? intensity / 10 : intensity));
+  return { emotion, intensity, valence: emotionValence(emotion) };
+}
+
 /**
  * A compact, grouped rendering of the palette for an LLM prompt — families on
  * one line each so the model sees the full range without a giant flat list.

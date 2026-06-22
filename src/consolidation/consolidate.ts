@@ -16,11 +16,18 @@
  */
 
 import type { MemoryStore } from "../store/types.js";
+import { affectFromMetadata } from "../enrich/emotions.js";
 
 export interface SalienceWeights {
   recency: number;
   frequency: number;
   importance: number;
+  /**
+   * Weight on emotional intensity — an affect-laden memory (a prod outage, a
+   * hard correction) resists forgetting the way the brain hangs onto
+   * high-arousal events. 0 makes consolidation affect-blind.
+   */
+  emotion: number;
   /** Half-life (days) for the recency term. */
   recencyHalfLifeDays: number;
 }
@@ -29,19 +36,32 @@ export const DEFAULT_SALIENCE: SalienceWeights = {
   recency: 1,
   frequency: 1,
   importance: 1.5,
+  emotion: 0.75,
   recencyHalfLifeDays: 14,
 };
 
-/** Salience of a memory: a blend of recency, retrieval frequency, and importance. */
+/**
+ * Salience of a memory: a blend of recency, retrieval frequency, importance,
+ * and emotional intensity (read from metadata when present). Higher = keep hot.
+ */
 export function salience(
-  rec: { createdAt: number; lastUsedAt: number | null; useCount: number; importance: number },
+  rec: {
+    createdAt: number; lastUsedAt: number | null; useCount: number; importance: number;
+    metadata?: Record<string, unknown> | null;
+  },
   now: number,
   w: SalienceWeights = DEFAULT_SALIENCE,
 ): number {
   const ageDays = (now - (rec.lastUsedAt ?? rec.createdAt)) / 86_400_000;
   const recency = Math.pow(2, -Math.max(0, ageDays) / w.recencyHalfLifeDays); // 1 → 0
   const frequency = 1 - 1 / (1 + rec.useCount); // 0 → 1, saturating
-  return w.recency * recency + w.frequency * frequency + w.importance * rec.importance;
+  const emotion = affectFromMetadata(rec.metadata).intensity; // 0 when untagged
+  return (
+    w.recency * recency +
+    w.frequency * frequency +
+    w.importance * rec.importance +
+    w.emotion * emotion
+  );
 }
 
 export interface ConsolidateOptions {

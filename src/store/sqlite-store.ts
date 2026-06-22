@@ -50,6 +50,8 @@ interface MemoryRow {
   last_used_at: number | null;
   use_count: number;
   archived: number;
+  valid_at: number | null;
+  invalid_at: number | null;
   embedding: Buffer | null;
   embedding_model: string | null;
   embedding_dim: number | null;
@@ -89,6 +91,8 @@ function rowToRecord(r: MemoryRow): MemoryRecord {
     lastUsedAt: r.last_used_at,
     useCount: r.use_count,
     archived: !!r.archived,
+    validAt: r.valid_at,
+    invalidAt: r.invalid_at,
     embedding: r.embedding ? decodeVec(r.embedding) : null,
     embeddingModel: r.embedding_model,
     embeddingDim: r.embedding_dim,
@@ -122,6 +126,8 @@ export class SqliteStore implements MemoryStore {
         last_used_at  INTEGER,
         use_count     INTEGER NOT NULL DEFAULT 0,
         archived      INTEGER NOT NULL DEFAULT 0,
+        valid_at      INTEGER,
+        invalid_at    INTEGER,
         embedding     BLOB,
         embedding_model TEXT,
         embedding_dim INTEGER
@@ -161,20 +167,25 @@ export class SqliteStore implements MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_entity_memory ON entity(memory_id);
     `);
 
-    // Additive migration for DBs created before the `archived` column existed.
+    // Additive migrations for DBs created before a column existed.
     const cols = this.db.prepare(`PRAGMA table_info(memory)`).all() as Array<{ name: string }>;
-    if (!cols.some((c) => c.name === "archived")) {
+    const has = (name: string) => cols.some((c) => c.name === name);
+    if (!has("archived")) {
       this.db.exec(`ALTER TABLE memory ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
     }
+    if (!has("valid_at")) this.db.exec(`ALTER TABLE memory ADD COLUMN valid_at INTEGER`);
+    if (!has("invalid_at")) this.db.exec(`ALTER TABLE memory ADD COLUMN invalid_at INTEGER`);
   }
 
   upsert(rec: MemoryRecord): void {
     const insertMem = this.db.prepare(`
       INSERT INTO memory (id, content, source, tier, importance, metadata, content_hash,
                           created_at, updated_at, last_used_at, use_count,
+                          valid_at, invalid_at,
                           embedding, embedding_model, embedding_dim)
       VALUES (@id, @content, @source, @tier, @importance, @metadata, @content_hash,
               @created_at, @updated_at, @last_used_at, @use_count,
+              @valid_at, @invalid_at,
               @embedding, @embedding_model, @embedding_dim)
       ON CONFLICT(id) DO UPDATE SET
         content=excluded.content, source=excluded.source, tier=excluded.tier,
@@ -182,6 +193,8 @@ export class SqliteStore implements MemoryStore {
         content_hash=excluded.content_hash, updated_at=excluded.updated_at,
         embedding=excluded.embedding, embedding_model=excluded.embedding_model,
         embedding_dim=excluded.embedding_dim
+        -- valid_at / invalid_at deliberately preserved across reindex (like
+        -- created_at): supersession state must survive a content re-embed.
     `);
     insertMem.run({
       id: rec.id,
@@ -195,6 +208,8 @@ export class SqliteStore implements MemoryStore {
       updated_at: rec.updatedAt,
       last_used_at: rec.lastUsedAt,
       use_count: rec.useCount,
+      valid_at: rec.validAt,
+      invalid_at: rec.invalidAt,
       embedding: rec.embedding ? encodeVec(rec.embedding) : null,
       embedding_model: rec.embeddingModel,
       embedding_dim: rec.embeddingDim,
@@ -292,6 +307,12 @@ export class SqliteStore implements MemoryStore {
     if (ids.length === 0) return;
     const ph = ids.map(() => "?").join(",");
     this.db.prepare(`UPDATE memory SET archived = ? WHERE id IN (${ph})`).run(archived ? 1 : 0, ...ids);
+  }
+
+  setInvalidAt(ids: string[], at: number | null): void {
+    if (ids.length === 0) return;
+    const ph = ids.map(() => "?").join(",");
+    this.db.prepare(`UPDATE memory SET invalid_at = ? WHERE id IN (${ph})`).run(at, ...ids);
   }
 
   // --- Associative graph (Phase 2) -----------------------------------------

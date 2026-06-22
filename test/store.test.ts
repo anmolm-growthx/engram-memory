@@ -16,6 +16,8 @@ function rec(partial: Partial<MemoryRecord> & { id: string; content: string }): 
     lastUsedAt: null,
     useCount: 0,
     archived: false,
+    validAt: now,
+    invalidAt: null,
     embedding: null,
     embeddingModel: null,
     embeddingDim: null,

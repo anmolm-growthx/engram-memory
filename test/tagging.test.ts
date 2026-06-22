@@ -14,7 +14,7 @@ test("tagMemories: LLM tags are coerced + clamped; order preserved", async () =>
     name: "stub",
     async complete() {
       return JSON.stringify([
-        { tier: "semantic", importance: 9, emotion: "Proud", emotionIntensity: 0.8, topic: "deploy rule", people: ["@Anmol"], summary: "a rule" },
+        { tier: "semantic", importance: 9, emotion: "Proud", emotionIntensity: 0.8, topic: "deploy rule", people: ["@Jordan"], summary: "a rule" },
         { tier: "bogus", importance: 2, emotion: "", emotionIntensity: 50, topic: "x", people: "nope", summary: "" },
       ]);
     },
@@ -25,7 +25,7 @@ test("tagMemories: LLM tags are coerced + clamped; order preserved", async () =>
   assert.equal(tags[0]!.tier, "semantic");
   assert.equal(tags[0]!.importance, 0.9);
   assert.equal(tags[0]!.emotion, "proud");
-  assert.deepEqual(tags[0]!.people, ["anmol"]);
+  assert.deepEqual(tags[0]!.people, ["jordan"]);
   // item 2: invalid tier → episodic; intensity clamped to 1; emotion default; bad people → []
   assert.equal(tags[1]!.tier, "episodic");
   assert.equal(tags[1]!.emotionIntensity, 1);
