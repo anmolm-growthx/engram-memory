@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Engram } from "./engram.js";
 import { loadConfig } from "./config.js";
+import { emotionPalette, emotionFamilyLegend } from "./enrich/emotions.js";
 import type { EmbeddingConfig } from "./embeddings/provider.js";
 import type { LLMConfig } from "./llm/provider.js";
 
@@ -282,13 +283,23 @@ async function main(): Promise<void> {
         }
         const tags = await engram.tagMemories(texts);
         process.stdout.write(`${JSON.stringify(tags)}\n`);
+        // Whole-batch LLM failure means these are neutral fallbacks, not
+        // judgments. Exit non-zero so gating callers (which would silently
+        // drop the fallback's low scores) switch to persist-everything.
+        if (tags.length > 0 && tags.every((t) => t.llmFailed)) {
+          process.stderr.write("tag: LLM unavailable — emitted neutral fallback tags\n");
+          process.exitCode = 2;
+        }
         break;
       }
 
       case "graph": {
         const g = engram.graphExport();
+        // Bundle the emotion palette + family legend so any dashboard consuming
+        // this JSON (engram's own, or Friday's /live) colours neurons identically.
+        const out = { ...g, palette: emotionPalette(), families: emotionFamilyLegend() };
         // Default to compact JSON (this feeds the dashboard); --pretty for humans.
-        process.stdout.write(`${JSON.stringify(g, null, flags.pretty ? 2 : 0)}\n`);
+        process.stdout.write(`${JSON.stringify(out, null, flags.pretty ? 2 : 0)}\n`);
         break;
       }
 

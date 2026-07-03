@@ -30,6 +30,13 @@ export interface MemoryTags {
   people: string[];
   /** One concise sentence capturing the gist. */
   summary: string;
+  /**
+   * Set when the LLM was unavailable/failed and this is the neutral fallback,
+   * NOT a real judgment. Callers running a salience gate must not treat these
+   * scores as "judged unimportant" — the fallback's low scores would silently
+   * fail the gate and the memory would be lost.
+   */
+  llmFailed?: true;
 }
 
 const FALLBACK: MemoryTags = {
@@ -96,17 +103,21 @@ function buildPrompt(texts: string[]): string {
  */
 export async function tagMemories(llm: LLMProvider | null, texts: string[]): Promise<MemoryTags[]> {
   if (texts.length === 0) return [];
-  const fallback = texts.map((t) => ({ ...FALLBACK, summary: t.replace(/\s+/g, " ").slice(0, 120) }));
-  if (!llm) return fallback;
+  const fallback = (t: string): MemoryTags => ({
+    ...FALLBACK,
+    summary: t.replace(/\s+/g, " ").slice(0, 120),
+    llmFailed: true,
+  });
+  if (!llm) return texts.map(fallback);
 
   let resp: string;
   try {
     resp = await llm.complete(buildPrompt(texts));
   } catch {
-    return fallback;
+    return texts.map(fallback);
   }
   const parsed = parseTags(resp);
   return texts.map((t, i) =>
-    parsed[i] ? coerce(parsed[i]!, t.replace(/\s+/g, " ").slice(0, 120)) : fallback[i]!,
+    parsed[i] ? coerce(parsed[i]!, t.replace(/\s+/g, " ").slice(0, 120)) : fallback(t),
   );
 }
