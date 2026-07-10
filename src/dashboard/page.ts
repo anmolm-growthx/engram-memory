@@ -57,6 +57,18 @@ export const DASHBOARD_HTML = `<!doctype html>
   #panel .close { position: absolute; top: 10px; right: 12px; color: var(--muted); cursor: pointer; border: none; background: none; padding: 0; }
 
   .hint { position: absolute; left: 18px; bottom: 14px; color: var(--muted); z-index: 4; font-size: 11px; }
+  #elegend { position: absolute; left: 16px; top: 92px; z-index: 5; width: 158px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(10px); padding: 8px 10px; font-size: 11px; box-shadow: 0 8px 28px rgba(0,0,0,0.4); }
+  #elegend .hd { color: var(--accent); letter-spacing: .4px; text-transform: uppercase; font-size: 10px;
+    font-weight: 600; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+  #elegend .chev { transition: transform .15s; }
+  #elegend.collapsed .chev { transform: rotate(-90deg); }
+  #elegend.collapsed .items { display: none; }
+  #elegend .items { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; max-height: 52vh; overflow: auto; }
+  #elegend .items span { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  #elegend .items .sep { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); }
+  #elegend .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   #toast { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); z-index: 8;
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px;
     backdrop-filter: blur(8px); opacity: 0; transition: opacity .2s; pointer-events: none; }
@@ -84,6 +96,10 @@ export const DASHBOARD_HTML = `<!doctype html>
     </div>
   </div>
   <div id="panel"><button class="close" id="panelClose">✕</button><h3 id="panelTitle">memory</h3><div class="body" id="panelBody"></div><div class="tags" id="panelTags"></div></div>
+  <div id="elegend">
+    <div class="hd" id="elegendToggle">emotions <span class="chev">▾</span></div>
+    <div class="items" id="elegendItems"></div>
+  </div>
   <div class="hint">scroll to zoom · drag to pan · click a neuron</div>
   <div id="toast"></div>
 </div>
@@ -111,7 +127,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   }
   window.addEventListener("resize", resize);
 
-  var nodes = [], edges = [], byId = {}, palette = {};
+  var nodes = [], edges = [], byId = {}, palette = {}, families = [];
   var view = { x: 0, y: 0, k: 1 };
   var alpha = 0, tick = 0, framed = false, userMoved = false;
   var hover = null, selected = null;
@@ -122,16 +138,28 @@ export const DASHBOARD_HTML = `<!doctype html>
     clearTimeout(t._h); t._h = setTimeout(function () { t.style.opacity = "0"; }, 1800);
   }
 
+  // Untagged / affect-neutral neurons sit quiet so felt ones pop.
+  var UNTAGGED_COLOR = [90, 100, 120];   // muted slate-gray
+  var DIM_BASE = [38, 44, 60];           // what a low-intensity emotion fades toward
+  function hexToRgb(hex) {
+    var h = hex.charAt(0) === "#" ? hex.slice(1) : hex;
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  function mix(a, b, t) {
+    return [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)];
+  }
+  function rgb(c) { return "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")"; }
   function nodeColor(n) {
     if (n.archived) return "rgba(120,130,150,0.35)";
     var info = n.emotion ? palette[n.emotion] : null;
-    if (info) {
-      var sat = 55 + Math.round((n.emotionIntensity || 0.4) * 35);
-      return "hsl(" + info.hue + "," + sat + "%,62%)";
+    if (info && info.color) {
+      // Vividness tracks emotional intensity: a faint feeling barely tints the
+      // dim base, a strong one shows the family colour at full strength.
+      var t = 0.45 + 0.55 * Math.min(1, (n.emotionIntensity || 0.4));
+      return rgb(mix(DIM_BASE, hexToRgb(info.color), t));
     }
-    var tierHue = { episodic: 210, semantic: 150, procedural: 38, working: 220 };
-    var h = (n.tier && tierHue[n.tier] != null) ? tierHue[n.tier] : 215;
-    return "hsl(" + h + ",45%,60%)";
+    return rgb(UNTAGGED_COLOR);
   }
   function nodeRadius(n) {
     return 2.2 + (n.importance || 0) * 3.6 + Math.min(2.4, (n.salience || 0) * 1.2) + (n.useCount ? Math.min(2, Math.log(1 + n.useCount)) : 0);
@@ -139,6 +167,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 
   function buildGraph(data) {
     palette = data.palette || {};
+    if (data.families && data.families.length) { families = data.families; buildEmotionLegend(); }
     byId = {};
     var spread = 50 * Math.sqrt(Math.max(1, data.nodes.length));
     nodes = data.nodes.map(function (n) {
@@ -375,6 +404,16 @@ export const DASHBOARD_HTML = `<!doctype html>
       el.appendChild(span);
     }
   }
+  function buildEmotionLegend() {
+    var el = document.getElementById("elegend"); if (!el) return;
+    var html = "";
+    for (var i = 0; i < families.length; i++) {
+      var f = families[i];
+      html += "<span title='" + f.valence + "'><i class='dot' style='color:" + f.color + ";background:" + f.color + "'></i>" + f.key + "</span>";
+    }
+    html += "<span class='sep'><i class='dot' style='color:rgb(90,100,120);background:rgb(90,100,120)'></i>untagged</span>";
+    document.getElementById("elegendItems").innerHTML = html;
+  }
   function load() {
     fetch("api/graph").then(function (r) { return r.json(); }).then(function (data) {
       buildGraph(data);
@@ -415,6 +454,9 @@ export const DASHBOARD_HTML = `<!doctype html>
   document.getElementById("dream").addEventListener("click", function () { maintain("dream"); });
   document.getElementById("reindex").addEventListener("click", function () { maintain("reindex"); });
   document.getElementById("refresh").addEventListener("click", load);
+  document.getElementById("elegendToggle").addEventListener("click", function () {
+    document.getElementById("elegend").classList.toggle("collapsed");
+  });
 
   resize(); buildLegend(); load(); frame();
 })();

@@ -22,96 +22,127 @@ export interface EmotionFamily {
   /** Family label (also a valid emotion in its own right). */
   key: string;
   valence: Valence;
-  /** Base hue (0–360) for dashboard tinting; saturation scales with intensity. */
+  /** Base hue (0–360); kept for reference, but `color` is what the dashboard uses. */
   hue: number;
+  /**
+   * Explicit, perceptually-distinct swatch (hex) for dashboard tinting. Chosen
+   * by hand so all 21 affect families read apart from each other (hue alone
+   * collides — too many greens/purples/blues land on top of one another), and
+   * so untagged/neutral memories stay quiet while felt ones pop. Intensity
+   * modulates vividness, not the hue.
+   */
+  color: string;
   /** Emotions belonging to this family, fine- to coarse-grained. */
   members: string[];
 }
 
 /**
  * The full taxonomy, by family. Order matters only for display; lookup is by
- * member name. Families share a hue so the graph reads as mood-coloured regions.
+ * member name. Each family owns one distinct colour so the graph reads as
+ * mood-coloured regions and every emotion is legible against the others.
  */
 export const EMOTION_FAMILIES: EmotionFamily[] = [
-  { key: "joy", valence: "positive", hue: 48, members: [
+  { key: "joy", valence: "positive", hue: 45, color: "#FFCE3B", members: [
     "joy", "happiness", "delight", "glee", "cheerfulness", "elation",
     "euphoria", "ecstasy", "bliss", "jubilation", "pleasure", "enjoyment" ] },
-  { key: "amusement", valence: "positive", hue: 52, members: [
+  { key: "amusement", valence: "positive", hue: 33, color: "#FF9E2C", members: [
     "amusement", "playfulness", "mirth", "silliness", "lightheartedness" ] },
-  { key: "love", valence: "positive", hue: 332, members: [
+  { key: "love", valence: "positive", hue: 330, color: "#FF5DA2", members: [
     "love", "affection", "tenderness", "warmth", "fondness", "adoration",
     "compassion", "empathy", "caring", "intimacy", "attraction", "desire",
     "infatuation", "romance" ] },
-  { key: "gratitude", valence: "positive", hue: 96, members: [
+  { key: "gratitude", valence: "positive", hue: 145, color: "#58D68D", members: [
     "gratitude", "thankfulness", "appreciation", "indebtedness" ] },
-  { key: "pride", valence: "positive", hue: 286, members: [
+  { key: "pride", valence: "positive", hue: 262, color: "#B07CFF", members: [
     "pride", "triumph", "accomplishment", "confidence", "self-assurance",
     "satisfaction", "vindication" ] },
-  { key: "admiration", valence: "positive", hue: 270, members: [
+  { key: "admiration", valence: "positive", hue: 252, color: "#7B5CFF", members: [
     "admiration", "respect", "reverence", "esteem" ] },
-  { key: "awe", valence: "ambivalent", hue: 264, members: [
+  { key: "awe", valence: "ambivalent", hue: 222, color: "#5C8BFF", members: [
     "awe", "wonder", "amazement", "fascination" ] },
-  { key: "hope", valence: "positive", hue: 156, members: [
+  { key: "hope", valence: "positive", hue: 174, color: "#19C3B2", members: [
     "hope", "optimism", "anticipation", "eagerness", "enthusiasm", "excitement",
     "exhilaration", "inspiration", "motivation", "determination", "zeal" ] },
-  { key: "interest", valence: "neutral", hue: 200, members: [
+  { key: "interest", valence: "neutral", hue: 192, color: "#3FC1E0", members: [
     "interest", "curiosity", "intrigue", "engagement", "focus", "alertness",
     "contemplation", "concentration" ] },
-  { key: "serenity", valence: "positive", hue: 186, members: [
+  { key: "serenity", valence: "positive", hue: 184, color: "#74E0E8", members: [
     "serenity", "calmness", "contentment", "peace", "tranquility", "relaxation",
     "relief", "ease", "comfort", "reassurance" ] },
-  { key: "surprise", valence: "ambivalent", hue: 60, members: [
+  { key: "surprise", valence: "ambivalent", hue: 52, color: "#FFE45E", members: [
     "surprise", "astonishment", "shock", "startle", "disbelief", "realization" ] },
-  { key: "nostalgia", valence: "ambivalent", hue: 28, members: [
+  { key: "nostalgia", valence: "ambivalent", hue: 32, color: "#D9A066", members: [
     "nostalgia", "sentimentality", "wistfulness", "longing", "yearning",
     "homesickness" ] },
-  { key: "sadness", valence: "negative", hue: 220, members: [
+  { key: "sadness", valence: "negative", hue: 214, color: "#3E6DB5", members: [
     "sadness", "sorrow", "grief", "despair", "hopelessness", "disappointment",
     "melancholy", "loneliness", "heartbreak", "gloom", "dejection", "misery",
     "anguish", "mourning", "regret" ] },
-  { key: "fear", valence: "negative", hue: 276, members: [
+  { key: "fear", valence: "negative", hue: 282, color: "#9B30D9", members: [
     "fear", "anxiety", "nervousness", "worry", "dread", "apprehension",
     "panic", "terror", "horror", "unease", "insecurity", "vulnerability",
     "trepidation" ] },
-  { key: "stress", valence: "negative", hue: 14, members: [
+  { key: "stress", valence: "negative", hue: 17, color: "#FF6A2B", members: [
     "stress", "overwhelm", "pressure", "tension", "distress", "helplessness",
     "burnout", "exhaustion", "frazzled" ] },
-  { key: "anger", valence: "negative", hue: 2, members: [
+  { key: "anger", valence: "negative", hue: 0, color: "#E63A3A", members: [
     "anger", "frustration", "irritation", "annoyance", "rage", "fury",
     "resentment", "indignation", "hostility", "bitterness", "exasperation",
     "outrage", "agitation" ] },
-  { key: "disgust", valence: "negative", hue: 104, members: [
+  { key: "disgust", valence: "negative", hue: 66, color: "#A6B838", members: [
     "disgust", "revulsion", "distaste", "aversion", "loathing", "contempt",
     "disdain", "scorn" ] },
-  { key: "shame", valence: "negative", hue: 22, members: [
+  { key: "shame", valence: "negative", hue: 30, color: "#C0701F", members: [
     "shame", "guilt", "embarrassment", "humiliation", "remorse",
     "self-consciousness", "mortification", "sheepishness" ] },
-  { key: "envy", valence: "negative", hue: 116, members: [
+  { key: "envy", valence: "negative", hue: 146, color: "#2F8F5B", members: [
     "envy", "jealousy", "covetousness" ] },
-  { key: "confusion", valence: "neutral", hue: 290, members: [
+  { key: "confusion", valence: "neutral", hue: 225, color: "#9AA7C7", members: [
     "confusion", "doubt", "uncertainty", "ambivalence", "conflicted",
     "skepticism", "suspicion", "distrust", "hesitation", "bewilderment" ] },
-  { key: "boredom", valence: "negative", hue: 210, members: [
+  { key: "boredom", valence: "negative", hue: 220, color: "#6B7486", members: [
     "boredom", "apathy", "indifference", "disinterest", "weariness", "fatigue",
     "numbness", "listlessness", "restlessness" ] },
-  { key: "neutral", valence: "neutral", hue: 0, members: [ "neutral" ] },
+  { key: "neutral", valence: "neutral", hue: 222, color: "#5B6577", members: [ "neutral" ] },
 ];
 
 interface EmotionInfo {
   family: string;
   valence: Valence;
   hue: number;
+  color: string;
 }
 
 const META = new Map<string, EmotionInfo>();
 for (const fam of EMOTION_FAMILIES) {
   for (const m of fam.members) {
-    if (!META.has(m)) META.set(m, { family: fam.key, valence: fam.valence, hue: fam.hue });
+    if (!META.has(m)) META.set(m, { family: fam.key, valence: fam.valence, hue: fam.hue, color: fam.color });
   }
 }
 
 /** Every emotion in the palette, flat and de-duplicated (lowercase). */
 export const EMOTIONS: string[] = [...META.keys()];
+
+/**
+ * emotion -> { color, hue, valence, family } so any frontend can colour neurons
+ * by feeling. Shared single source of truth for the dashboard server and CLI.
+ */
+export function emotionPalette(): Record<string, { color: string; hue: number; valence: Valence; family: string }> {
+  const p: Record<string, { color: string; hue: number; valence: Valence; family: string }> = {};
+  for (const fam of EMOTION_FAMILIES) {
+    for (const m of fam.members) if (!p[m]) p[m] = { color: fam.color, hue: fam.hue, valence: fam.valence, family: fam.key };
+  }
+  return p;
+}
+
+/** One swatch per family, valence-ordered, for an emotion legend (excludes plain "neutral"). */
+export function emotionFamilyLegend(): Array<{ key: string; color: string; valence: Valence }> {
+  const order: Record<string, number> = { positive: 0, ambivalent: 1, neutral: 2, negative: 3 };
+  return EMOTION_FAMILIES
+    .filter((f) => f.key !== "neutral")
+    .map((f) => ({ key: f.key, color: f.color, valence: f.valence }))
+    .sort((a, b) => (order[a.valence] ?? 9) - (order[b.valence] ?? 9));
+}
 
 /** Look up an emotion's family/valence/hue, or undefined if unknown. */
 export function emotionInfo(emotion: string | undefined | null): EmotionInfo | undefined {
