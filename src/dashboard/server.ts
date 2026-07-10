@@ -14,16 +14,7 @@
 import http from "node:http";
 import type { Engram } from "../engram.js";
 import { DASHBOARD_HTML } from "./page.js";
-import { EMOTION_FAMILIES } from "../enrich/emotions.js";
-
-/** emotion -> { hue, valence } so the frontend can colour neurons by feeling. */
-function emotionPalette(): Record<string, { hue: number; valence: string }> {
-  const p: Record<string, { hue: number; valence: string }> = {};
-  for (const fam of EMOTION_FAMILIES) {
-    for (const m of fam.members) if (!p[m]) p[m] = { hue: fam.hue, valence: fam.valence };
-  }
-  return p;
-}
+import { emotionPalette, emotionFamilyLegend } from "../enrich/emotions.js";
 
 export interface DashboardOptions {
   port?: number;
@@ -43,6 +34,7 @@ function sendJson(res: http.ServerResponse, code: number, body: unknown): void {
  */
 export function startDashboard(engram: Engram, opts: DashboardOptions = {}): http.Server {
   const palette = emotionPalette();
+  const families = emotionFamilyLegend();
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -63,7 +55,7 @@ export function startDashboard(engram: Engram, opts: DashboardOptions = {}): htt
 
       if (req.method === "GET" && path === "/api/graph") {
         const g = engram.graphExport();
-        sendJson(res, 200, { nodes: g.nodes, edges: g.edges, stats: g.stats, palette });
+        sendJson(res, 200, { nodes: g.nodes, edges: g.edges, stats: g.stats, palette, families });
         return;
       }
 
@@ -80,6 +72,13 @@ export function startDashboard(engram: Engram, opts: DashboardOptions = {}): htt
       }
 
       if (req.method === "POST" && path === "/api/maintain") {
+        // CSRF hardening: the server binds to localhost, but any webpage can
+        // still fire a cross-origin form POST at it. Only accept same-origin
+        // (or origin-less, e.g. curl) requests.
+        const origin = req.headers.origin;
+        if (origin && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(origin)) {
+          return sendJson(res, 403, { error: "cross-origin request rejected" });
+        }
         const op = url.searchParams.get("op");
         if (op === "dream") {
           const r = engram.dream({ consolidate: { capacity: undefined } });

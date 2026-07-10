@@ -14,6 +14,7 @@
 
 import type { LLMProvider } from "../llm/provider.js";
 import { emotionPalettePrompt } from "./emotions.js";
+import { extractJsonArray } from "../util/json.js";
 
 export interface MemoryTags {
   /** Structure: episodic (an event), semantic (a durable fact/rule), procedural (a how-to), working (transient). */
@@ -68,16 +69,11 @@ function coerce(o: Record<string, unknown>, fallbackSummary: string): MemoryTags
   };
 }
 
-/** Extract the first JSON array from an LLM reply. */
+/** Extract the first JSON array from an LLM reply (balanced-bracket scan). */
 export function parseTags(resp: string): Record<string, unknown>[] {
-  const m = resp.match(/\[[\s\S]*\]/);
-  if (!m) return [];
-  try {
-    const arr = JSON.parse(m[0]) as unknown;
-    return Array.isArray(arr) ? (arr.filter((o) => o && typeof o === "object") as Record<string, unknown>[]) : [];
-  } catch {
-    return [];
-  }
+  const arr = extractJsonArray(resp);
+  if (!arr) return [];
+  return arr.filter((o) => o && typeof o === "object") as Record<string, unknown>[];
 }
 
 function buildPrompt(texts: string[]): string {
@@ -85,7 +81,7 @@ function buildPrompt(texts: string[]): string {
   return (
     `You tag memories for an AI agent's memory system. For each numbered item, classify:\n` +
     `- "tier": episodic (a specific event/conversation), semantic (a durable fact/rule/preference), or procedural (a how-to/process)\n` +
-    `- "importance": 0.0-1.0 — worth remembering long-term? (consequence, reusability, surprise)\n` +
+    `- "importance": 0.0-1.0 — worth remembering long-term? (consequence, reusability, surprise). Calibrate: work that shipped or changed state (a fix delivered, a PR opened/merged, a deploy, a report with evidence) and decisions/commitments/requirement-changes are 0.6+; plans and in-progress work 0.5-0.6; greetings, acks, and status chatter 0.3 or less\n` +
     `- "emotion": the single lowercase emotion that best fits the tone. Pick the most precise one from this palette (or the closest word if truly none fit):\n${emotionPalettePrompt()}\n` +
     `- "emotionIntensity": 0.0-1.0\n` +
     `- "topic": 1-3 word label\n` +

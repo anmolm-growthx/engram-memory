@@ -2,7 +2,7 @@
  * Offline entity extraction — the cheap, deterministic glossary builder.
  *
  * "Entities" here are the salient nouns a memory is *about*: proper names
- * (Pranav, Socket Mode), acronyms (API, MCP), and code identifiers
+ * (Ada Lovelace, Socket Mode), acronyms (API, MCP), and code identifiers
  * (`relevance_score`, conversations.replies, sqlite-vec). They are the hooks
  * two otherwise-dissimilar memories share — "the deploy that broke the
  * `relevance_score` column" and "added a migration for `relevance_score`" have
@@ -23,7 +23,7 @@ const SEPARATED = /\b[A-Za-z][A-Za-z0-9]*(?:[._/-][A-Za-z0-9]+)+\b/g;
 const CAMEL = /\b[a-z]+[A-Z][A-Za-z0-9]*\b/g;
 // Acronyms: 2–6 uppercase letters (API, MCP, SQL, RRF), optional trailing s.
 const ACRONYM = /\b[A-Z]{2,6}s?\b/g;
-// Proper-noun phrases: runs of Capitalised words (Pranav Bakre, Socket Mode).
+// Proper-noun phrases: runs of Capitalised words (Ada Lovelace, Socket Mode).
 const PROPER = /\b[A-Z][a-zA-Z0-9]+(?:\s+[A-Z][a-zA-Z0-9]+)*\b/g;
 // Backtick code spans.
 const CODE_SPAN = /`([^`\n]+)`/g;

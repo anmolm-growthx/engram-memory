@@ -141,6 +141,8 @@ export interface MemoryStore {
   allEdges(): MemoryEdge[];
   /** Remove every edge touching any of `ids` (either endpoint). Returns rows deleted. */
   deleteEdgesFor(ids: string[]): number;
+  /** Remove every edge of the given types (used to prune derived edges before a rebuild). */
+  deleteEdgesByType(types: EdgeType[]): number;
   edgeCount(): number;
 
   // --- Entity glossary (Phase 2) -------------------------------------------

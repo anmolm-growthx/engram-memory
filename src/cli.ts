@@ -178,7 +178,7 @@ async function main(): Promise<void> {
         });
         process.stdout.write(
           `Indexed ${res.memories} memories from ${res.files} files ` +
-            `in ${res.directory} (${res.durationMs}ms, pruned ${res.pruned}, model ${res.embeddingModel}).\n` +
+            `in ${res.directory} (${res.durationMs}ms, pruned ${res.pruned}, skipped ${res.skipped} unchanged, model ${res.embeddingModel}).\n` +
             (flags["no-graph"] ? "" : `Associative graph: ${engram.stats().edges} edges.\n`),
         );
         if (flags["llm-edges"]) {
@@ -296,7 +296,7 @@ async function main(): Promise<void> {
       case "graph": {
         const g = engram.graphExport();
         // Bundle the emotion palette + family legend so any dashboard consuming
-        // this JSON (engram's own, or Friday's /live) colours neurons identically.
+        // this JSON (engram's own, or an embedding app's) colours neurons identically.
         const out = { ...g, palette: emotionPalette(), families: emotionFamilyLegend() };
         // Default to compact JSON (this feeds the dashboard); --pretty for humans.
         process.stdout.write(`${JSON.stringify(out, null, flags.pretty ? 2 : 0)}\n`);

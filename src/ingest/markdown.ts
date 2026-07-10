@@ -107,7 +107,7 @@ export function canonicalTier(raw: string | null | undefined): string | undefine
   const t = raw.trim().toLowerCase();
   if (t === "") return undefined;
   if (CANONICAL_TIERS.has(t)) return t;
-  // Hand-curated, durable knowledge (Friday's memory taxonomy + common synonyms).
+  // Hand-curated, durable knowledge (common agent memory taxonomies + synonyms).
   if (["feedback", "project", "reference", "user", "fact", "lesson", "rule", "note", "insight"].includes(t)) return "semantic";
   // Time-stamped conversational / log entries.
   if (["conversation", "daily", "exchange", "session", "episode", "log", "message"].includes(t)) return "episodic";

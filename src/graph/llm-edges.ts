@@ -16,6 +16,7 @@
 
 import type { EdgeType, MemoryEdge, MemoryStore } from "../store/types.js";
 import type { LLMProvider } from "../llm/provider.js";
+import { extractJsonArray } from "../util/json.js";
 
 export interface LlmEdgeOptions {
   /** Max candidate pairs to classify (caps LLM cost). Default 80. */
@@ -48,18 +49,12 @@ interface Labelled {
 
 /** Extract the first JSON array of {pair,rel,dir} objects from an LLM reply. */
 export function parseRelations(resp: string): Labelled[] {
-  const m = resp.match(/\[[\s\S]*\]/);
-  if (!m) return [];
-  try {
-    const arr = JSON.parse(m[0]) as unknown;
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .filter((o): o is Record<string, unknown> => !!o && typeof o === "object")
-      .map((o) => ({ pair: Number(o.pair), rel: String(o.rel ?? "none"), dir: o.dir ? String(o.dir) : undefined }))
-      .filter((o) => Number.isInteger(o.pair));
-  } catch {
-    return [];
-  }
+  const arr = extractJsonArray(resp);
+  if (!arr) return [];
+  return arr
+    .filter((o): o is Record<string, unknown> => !!o && typeof o === "object")
+    .map((o) => ({ pair: Number(o.pair), rel: String(o.rel ?? "none"), dir: o.dir ? String(o.dir) : undefined }))
+    .filter((o) => Number.isInteger(o.pair));
 }
 
 /** Collect unique unordered candidate pairs from the graph's structural edges. */

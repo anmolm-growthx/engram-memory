@@ -40,6 +40,12 @@ import type {
  */
 const ENTITY_SEED = 0.02;
 
+/**
+ * Skip query-entity seeding for entities tagged on more than this many
+ * memories — mirrors the `about`-edge doc-frequency cap in graph/build.ts.
+ */
+const ENTITY_SEED_MAX_DF = 8;
+
 /** Accepts 0..1 directly, or a 1..10 salience scale (auto-divided by 10). */
 function normalizeImportance(v?: number): number {
   if (v === undefined || Number.isNaN(v)) return 0.5;
@@ -53,16 +59,16 @@ export interface IndexOptions extends IngestOptions {
   /** Wipe the whole index before indexing — a clean full rebuild (default false). */
   fresh?: boolean;
   /**
-   * Only embed content not already stored (ids are content-hashed). Skips
+   * Only embed content that is new or whose content hash changed. Skips
    * re-embedding unchanged chunks — cheap reindex for append-style updates and
-   * paid embedders. Stale/edited chunks reconcile on the next full reindex.
+   * paid embedders. Deleted files/chunks reconcile on the next full reindex.
    */
   incremental?: boolean;
   /**
    * Rebuild the associative graph after indexing. `true`/omitted uses the
    * default builders (similar + temporal_next); `false` skips graph building;
-   * an object tunes the builders. Edges are derived over the WHOLE store, so
-   * this runs once per full index, not per file.
+   * an object tunes the builders. A full index derives edges over the WHOLE
+   * store; an incremental index only derives edges for the changed ids.
    */
   edges?: boolean | EdgeBuildOptions;
 }
@@ -164,26 +170,33 @@ export class Engram {
     const sources = new Set(inputs.map((i) => i.source).filter((s): s is string => !!s));
     let pruned = 0;
 
-    // Incremental: skip content already in the store (ids are content-hashed,
-    // so unchanged chunks have a stable id). Only NEW/changed chunks get
-    // embedded — critical when embedding costs money/latency (e.g. OpenAI), and
-    // what makes append-style auto-capture cheap. Stale/edited chunks are
-    // reconciled on the next full reindex. Mutually exclusive with fresh/prune.
+    // Incremental: skip content already stored AND unchanged (compared by
+    // content hash, since directory-ingest ids are position-based). Only
+    // new/edited chunks get embedded — critical when embedding costs
+    // money/latency (e.g. OpenAI), and what makes append-style auto-capture
+    // cheap. Edge derivation is likewise restricted to the changed ids.
+    // Mutually exclusive with fresh/prune.
     if (opts.incremental && !opts.fresh) {
       const before = inputs.length;
       inputs = inputs.filter((i) => {
         const id = i.id ?? sha256(i.content).slice(0, 16);
         const existing = this.store.getById(id);
-        return !existing; // keep only chunks not already stored
+        // Keep chunks that are new OR whose content changed (edited in place) —
+        // otherwise an edited paragraph keeps serving its outdated text until
+        // the next full reindex.
+        return !existing || existing.contentHash !== sha256(i.content);
       });
-      pruned = 0;
-      const added = await this.addManyResult(inputs);
-      if (opts.edges !== false && added > 0) {
-        this.buildEdges(typeof opts.edges === "object" ? opts.edges : undefined);
+      const addedIds = await this.addManyResult(inputs);
+      if (opts.edges !== false && addedIds.length > 0) {
+        this.buildEdges({
+          ...(typeof opts.edges === "object" ? opts.edges : {}),
+          onlyIds: addedIds,
+        });
       }
       return {
-        directory: dir, files: sources.size, memories: added,
-        pruned: before - added, durationMs: Date.now() - start,
+        directory: dir, files: sources.size, memories: addedIds.length,
+        pruned: 0, skipped: before - addedIds.length,
+        durationMs: Date.now() - start,
         embeddingModel: this.embedding.name,
       };
     }
@@ -200,17 +213,18 @@ export class Engram {
       files: sources.size,
       memories: inputs.length,
       pruned,
+      skipped: 0,
       durationMs: Date.now() - start,
       embeddingModel: this.embedding.name,
     };
   }
 
-  /** addMany that returns how many were stored (for incremental reporting). */
-  private async addManyResult(inputs: MemoryInput[]): Promise<number> {
-    if (inputs.length === 0) return 0;
+  /** addMany that returns the stored ids (for incremental edge derivation). */
+  private async addManyResult(inputs: MemoryInput[]): Promise<string[]> {
+    if (inputs.length === 0) return [];
     const recs = await this.toRecords(inputs);
     this.store.upsertMany(recs);
-    return recs.length;
+    return recs.map((r) => r.id);
   }
 
   /**
@@ -412,7 +426,13 @@ export class Engram {
     if (opts.entitySeeding !== false) {
       const matched = new Map<string, string>(); // memoryId → the matched entity
       for (const e of extractEntities(query)) {
-        for (const id of this.store.memoriesForEntity(e)) {
+        const ids = this.store.memoriesForEntity(e);
+        // Doc-frequency cap (same rationale as about-edges): an entity tagged on
+        // many memories ("API", "MCP") is too common to be a meaningful topic
+        // hit — seeding all of them would flood the results with 0.02-score
+        // matches that outrank mid-tier genuine hybrid hits.
+        if (ids.length === 0 || ids.length > ENTITY_SEED_MAX_DF) continue;
+        for (const id of ids) {
           if (!matched.has(id)) matched.set(id, e);
         }
       }
@@ -426,6 +446,7 @@ export class Engram {
         if (byId.has(id)) continue;
         const rec = freshById.get(id);
         if (!rec) continue;
+        if (!opts.includeArchived && rec.archived) continue; // cold-archived
         if (!opts.includeSuperseded && rec.invalidAt != null) continue; // stale fact
         byId.set(id, {
           id: rec.id,
@@ -463,6 +484,7 @@ export class Engram {
       }
       const rec = freshById.get(id);
       if (!rec) continue; // dangling edge endpoint — skip
+      if (!opts.includeArchived && rec.archived) continue; // cold-archived
       if (!opts.includeSuperseded && rec.invalidAt != null) continue; // stale fact
       byId.set(id, {
         id: rec.id,

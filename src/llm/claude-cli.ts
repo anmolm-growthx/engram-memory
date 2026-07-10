@@ -43,6 +43,8 @@ export class ClaudeCliProvider implements LLMProvider {
       // prompt arrives via stdin (file redirect) inside the tmux session
       return (await runViaTmux(this.bin, ["-p", ...flags], { input: prompt, timeoutMs })).trim();
     }
-    return (await runCommand(this.bin, ["-p", prompt, ...flags], { timeoutMs })).trim();
+    // Prompt via stdin (like tmux mode) rather than argv: a large tagging batch
+    // as a single argv element can exceed the OS ARG_MAX and fail with E2BIG.
+    return (await runCommand(this.bin, ["-p", ...flags], { input: prompt, timeoutMs })).trim();
   }
 }

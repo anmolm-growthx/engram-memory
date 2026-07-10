@@ -108,6 +108,9 @@ export class SqliteStore implements MemoryStore {
     this.db = new Database(dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("synchronous = NORMAL");
+    // Concurrent readers/writers (CLI indexing while a dashboard reads) wait for
+    // the lock instead of failing fast with SQLITE_BUSY.
+    this.db.pragma("busy_timeout = 5000");
     this.migrate();
   }
 
@@ -241,9 +244,12 @@ export class SqliteStore implements MemoryStore {
   }
 
   deleteBySourcePrefix(prefix: string): number {
+    // Escape LIKE wildcards in the prefix so a literal `_`/`%` in a file path
+    // (notes_1.md) can't over-match unrelated sources (notesX1.md).
+    const escaped = prefix.replace(/[\\%_]/g, (c) => `\\${c}`);
     const ids = this.db
-      .prepare(`SELECT id FROM memory WHERE source = ? OR source LIKE ?`)
-      .all(prefix, `${prefix}%`) as Array<{ id: string }>;
+      .prepare(`SELECT id FROM memory WHERE source = ? OR source LIKE ? ESCAPE '\\'`)
+      .all(prefix, `${escaped}%`) as Array<{ id: string }>;
     const tx = this.db.transaction((rows: Array<{ id: string }>) => {
       for (const { id } of rows) {
         this.db.prepare(`DELETE FROM memory WHERE id = ?`).run(id);
@@ -373,6 +379,13 @@ export class SqliteStore implements MemoryStore {
     const info = this.db
       .prepare(`DELETE FROM edge WHERE src_id IN (${ph}) OR dst_id IN (${ph})`)
       .run(...ids, ...ids);
+    return info.changes;
+  }
+
+  deleteEdgesByType(types: EdgeType[]): number {
+    if (types.length === 0) return 0;
+    const ph = types.map(() => "?").join(",");
+    const info = this.db.prepare(`DELETE FROM edge WHERE type IN (${ph})`).run(...types);
     return info.changes;
   }
 

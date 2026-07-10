@@ -125,7 +125,10 @@ export interface IndexResult {
   directory: string;
   files: number;
   memories: number;
+  /** Rows removed because their source file was re-ingested (full index only). */
   pruned: number;
+  /** Chunks left untouched because they were already stored and unchanged (incremental only). */
+  skipped: number;
   durationMs: number;
   embeddingModel: string;
 }
